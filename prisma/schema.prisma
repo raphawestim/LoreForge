@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role { USER ADMIN }
+enum WorkStatus { DRAFT ONGOING COMPLETED HIATUS }
+enum WorkVisibility { PUBLIC PRIVATE SUBSCRIBERS }
+enum PostType { CHAPTER ILLUSTRATION WORLDBUILDING DEVLOG ANNOUNCEMENT SHORT_STORY OTHER }
+enum AccessLevel { FREE SUBSCRIBERS_ONLY TIER_LOCKED }
+enum SubscriptionStatus { ACTIVE PAST_DUE CANCELED INCOMPLETE TRIALING }
+enum PaymentProvider { STRIPE MERCADO_PAGO MOCK }
+enum ReportTarget { USER POST COMMENT WORK }
+enum ReportStatus { OPEN REVIEWING RESOLVED DISMISSED }
+enum Currency { BRL USD }
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  image         String?
+  role          Role      @default(USER)
+  isWriter      Boolean   @default(false)
+  isSuspended   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  writerProfile WriterProfile?
+  readerProfile ReaderProfile?
+}
+model Account { id String @id @default(cuid()) userId String type String provider String providerAccountId String refresh_token String? access_token String? expires_at Int? token_type String? scope String? id_token String? session_state String? user User @relation(fields:[userId],references:[id],onDelete:Cascade) @@unique([provider, providerAccountId]) }
+model Session { id String @id @default(cuid()) sessionToken String @unique userId String expires DateTime user User @relation(fields:[userId],references:[id],onDelete:Cascade) }
+model VerificationToken { identifier String token String @unique expires DateTime @@unique([identifier, token]) }
+model WriterProfile { id String @id @default(cuid()) userId String @unique displayName String slug String @unique bio String? avatarUrl String? bannerUrl String? mainGenre String? websiteUrl String? socialLinks Json @default("{}") isPublished Boolean @default(false) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt user User @relation(fields:[userId],references:[id],onDelete:Cascade) works Work[] posts Post[] subscriptionTiers SubscriptionTier[] subscribers Subscription[] }
+model ReaderProfile { id String @id @default(cuid()) userId String @unique displayName String? bio String? avatarUrl String? createdAt DateTime @default(now()) updatedAt DateTime @updatedAt user User @relation(fields:[userId],references:[id],onDelete:Cascade) }
+model Genre { id String @id @default(cuid()) name String @unique slug String @unique description String? createdAt DateTime @default(now()) updatedAt DateTime @updatedAt works Work[] }
+model Work { id String @id @default(cuid()) writerProfileId String genreId String? title String slug String subtitle String? description String? coverUrl String? status WorkStatus @default(DRAFT) visibility WorkVisibility @default(PUBLIC) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt writerProfile WriterProfile @relation(fields:[writerProfileId],references:[id],onDelete:Cascade) genre Genre? @relation(fields:[genreId],references:[id]) posts Post[] @@unique([writerProfileId, slug]) }
+model SubscriptionTier { id String @id @default(cuid()) writerProfileId String name String description String? monthlyPriceCents Int currency Currency @default(BRL) benefits Json @default("[]") isActive Boolean @default(true) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt writerProfile WriterProfile @relation(fields:[writerProfileId],references:[id],onDelete:Cascade) subscriptions Subscription[] posts Post[] }
+model Post { id String @id @default(cuid()) writerProfileId String workId String? title String slug String excerpt String? content String coverImageUrl String? type PostType @default(CHAPTER) accessLevel AccessLevel @default(FREE) requiredTierId String? isPublished Boolean @default(false) publishedAt DateTime? createdAt DateTime @default(now()) updatedAt DateTime @updatedAt writerProfile WriterProfile @relation(fields:[writerProfileId],references:[id],onDelete:Cascade) work Work? @relation(fields:[workId],references:[id]) requiredTier SubscriptionTier? @relation(fields:[requiredTierId],references:[id]) @@unique([writerProfileId, slug]) }
+model Subscription { id String @id @default(cuid()) readerUserId String writerProfileId String tierId String provider PaymentProvider @default(MOCK) status SubscriptionStatus @default(ACTIVE) currentPeriodStart DateTime @default(now()) currentPeriodEnd DateTime cancelAtPeriodEnd Boolean @default(false) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt readerUser User @relation(fields:[readerUserId],references:[id]) writerProfile WriterProfile @relation(fields:[writerProfileId],references:[id]) tier SubscriptionTier @relation(fields:[tierId],references:[id]) @@unique([readerUserId, writerProfileId]) }
